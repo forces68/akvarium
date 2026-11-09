@@ -36,10 +36,12 @@ export function text(ctx, str, x, y, size = 32, color = '#e6f7ff', align = 'cent
 }
 
 // Фон-аквариум: вода, лучи света, пузырьки. Общий для всех сцен.
-export function drawWater(ctx, view, t, bubbles) {
+// theme — цвета аквариума: { water: [верх, низ], floor }.
+export function drawWater(ctx, view, t, bubbles, theme = null) {
+  const water = theme ? theme.water : ['#2bb3d6', '#0b3a5c'];
   const g = ctx.createLinearGradient(0, 0, 0, view.h);
-  g.addColorStop(0, '#2bb3d6');
-  g.addColorStop(1, '#0b3a5c');
+  g.addColorStop(0, water[0]);
+  g.addColorStop(1, water[1]);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, view.w, view.h);
 
@@ -63,7 +65,7 @@ export function drawWater(ctx, view, t, bubbles) {
   }
 
   // песок
-  ctx.fillStyle = '#e9c46a';
+  ctx.fillStyle = theme ? theme.floor : '#e9c46a';
   ctx.beginPath();
   ctx.moveTo(0, view.h - 60);
   for (let x = 0; x <= view.w; x += 40) ctx.lineTo(x, view.h - 60 + Math.sin(x * 0.03) * 10);

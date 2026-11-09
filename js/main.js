@@ -5,7 +5,9 @@ import { setupScreen } from './core/screen.js';
 import { audio } from './core/audio.js';
 import { createMenuScene } from './scenes/menu.js';
 import { createAquariumScene } from './scenes/aquarium.js';
-import { GRID_COLS, GRID_ROWS, START_COINS, OFFLINE_MAX_SEC, OFFLINE_RATE, incomeOf } from './game/data.js';
+import { createAlbumScene } from './scenes/album.js';
+import { OFFLINE_MAX_SEC, OFFLINE_RATE } from './game/data.js';
+import { makeState, totalIncome } from './game/state.js';
 
 const SAVE_KEY = 'state';
 const INTERSTITIAL_MIN_GAP = 180; // секунд между межстраничной рекламой (Пикабу требует ≥120)
@@ -49,17 +51,11 @@ async function boot() {
   const preloader = game.platform.showPreloader ? game.platform.showPreloader() : Promise.resolve();
 
   const saved = game.platform.load(SAVE_KEY);
-  game.state = {
-    coins: START_COINS, muted: false, noAds: false,
-    grid: Array(GRID_COLS * GRID_ROWS).fill(null),
-    eggsBought: {}, discovered: [], maxLevel: 0, lastSeen: Date.now(),
-    ...(saved || {}),
-  };
-  if (typeof game.state.eggsBought !== 'object') game.state.eggsBought = {}; // старый формат сохранения
+  game.state = makeState(saved);
   // Офлайн-доход: половина обычного, не больше 2 часов.
   const away = Math.min(OFFLINE_MAX_SEC, Math.max(0, (Date.now() - game.state.lastSeen) / 1000));
   if (away > 60) {
-    const perSec = game.state.grid.reduce((sum, c) => sum + incomeOf(c), 0);
+    const perSec = totalIncome(game.state);
     game.pendingOffline = Math.floor(perSec * away * OFFLINE_RATE);
   }
   const owned = await game.platform.getOwnedProducts().catch(() => []);
@@ -68,6 +64,7 @@ async function boot() {
 
   game.scenes.menu = createMenuScene(game);
   game.scenes.aquarium = createAquariumScene(game);
+  game.scenes.album = createAlbumScene(game);
   game.go('menu');
 
   await preloader;

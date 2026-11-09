@@ -1,4 +1,4 @@
-// Существа Рифа, нарисованные кодом (без картинок): у каждого уровня своя форма.
+// Существа, нарисованные кодом (без картинок): у каждого уровня своя форма.
 // drawCreature(ctx, x, y, size, cell, t) — центр (x, y), size — размер клетки.
 
 import { CREATURES } from './data.js';
@@ -30,6 +30,18 @@ function cheeks(ctx, x, y, gap, s) {
 function shine(ctx, x, y, rx, ry) {
   ctx.fillStyle = 'rgba(255,255,255,0.45)';
   ctx.beginPath(); ctx.ellipse(x, y, rx, ry, -0.5, 0, Math.PI * 2); ctx.fill();
+}
+
+// Снежинка-украшение для существ Ледяного моря.
+function snowflake(ctx, x, y, s, t) {
+  ctx.save();
+  ctx.translate(x, y); ctx.rotate(t * 0.5);
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(2, s * 0.18); ctx.lineCap = 'round';
+  for (let i = 0; i < 3; i++) {
+    ctx.rotate(Math.PI / 3);
+    ctx.beginPath(); ctx.moveTo(-s, 0); ctx.lineTo(s, 0); ctx.stroke();
+  }
+  ctx.restore();
 }
 
 const DRAW = [
@@ -192,7 +204,7 @@ const DRAW = [
   // 10. Черепаша
   (ctx, r, t, c) => {
     const f = Math.sin(t * 3) * 0.25;
-    ctx.fillStyle = '#95d5b2';
+    ctx.fillStyle = c.skin || '#95d5b2'; // лапы и голова
     for (const [x, y, a] of [[-r * 0.55, -r * 0.45, -0.6 - f], [r * 0.45, -r * 0.5, 0.6 + f], [-r * 0.55, r * 0.5, 0.6 + f], [r * 0.45, r * 0.5, -0.6 - f]]) {
       ctx.beginPath(); ctx.ellipse(x, y, r * 0.35, r * 0.15, a, 0, Math.PI * 2); ctx.fill();
     }
@@ -226,7 +238,24 @@ export function drawCreature(ctx, x, y, size, cell, t = 0) {
     ctx.fillStyle = glow;
     ctx.beginPath(); ctx.arc(0, 0, r * 1.5, 0, Math.PI * 2); ctx.fill();
   }
-  (DRAW[cell.lvl] || DRAW[1])(ctx, r, t, c);
+  if (c.deco === 'glow') { // Глубина: существа светятся
+    const g = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r * 1.35);
+    g.addColorStop(0, c.fin + '88');
+    g.addColorStop(1, c.fin + '00');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.35, 0, Math.PI * 2); ctx.fill();
+  }
+  (DRAW[c.shape] || DRAW[1])(ctx, r, t, c);
+  if (c.deco === 'glow') { // мерцающие огоньки вокруг
+    for (let i = 0; i < 3; i++) {
+      const a = t * 1.5 + i * 2.1;
+      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t * 4 + i);
+      ctx.fillStyle = '#fffbd6';
+      ctx.beginPath(); ctx.arc(Math.cos(a) * r * 1.05, Math.sin(a) * r * 1.05, r * 0.07, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  if (c.deco === 'ice') snowflake(ctx, -r * 0.7, -r * 0.75, r * 0.28, t);
   ctx.restore();
 
   // номер уровня
