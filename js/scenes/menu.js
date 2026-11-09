@@ -22,7 +22,7 @@ export function createMenuScene(game) {
       drawButton(ctx, sound);
       text(ctx, `площадка: ${game.platform.name}`, view.w / 2, view.h - 30, 20, '#16324f', 'center', 500);
     },
-    onTap(x, y) {
+    onDown(x, y) {
       if (hit(play, x, y)) { game.audio.blip(520); game.go('aquarium'); }
       else if (hit(sound, x, y)) {
         game.audio.setMuted(!game.audio.isMuted());

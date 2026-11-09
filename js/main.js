@@ -5,6 +5,7 @@ import { setupScreen } from './core/screen.js';
 import { audio } from './core/audio.js';
 import { createMenuScene } from './scenes/menu.js';
 import { createAquariumScene } from './scenes/aquarium.js';
+import { GRID_COLS, GRID_ROWS, START_COINS, OFFLINE_MAX_SEC, OFFLINE_RATE, incomeOf } from './game/data.js';
 
 const SAVE_KEY = 'state';
 const INTERSTITIAL_MIN_GAP = 180; // секунд между межстраничной рекламой (Пикабу требует ≥120)
@@ -27,8 +28,9 @@ const game = {
   scenes: {},
   scene: null,
 
-  go(name) { this.scene = this.scenes[name]; },
-  saveState() { this.platform.save(SAVE_KEY, this.state); },
+  pendingOffline: 0,
+  go(name) { this.scene = this.scenes[name]; this.scene.enter?.(); },
+  saveState() { this.state.lastSeen = Date.now(); this.platform.save(SAVE_KEY, this.state); },
 
   async maybeShowInterstitial() {
     if (this.playTime < INTERSTITIAL_FIRST_AFTER) return;
@@ -47,7 +49,19 @@ async function boot() {
   const preloader = game.platform.showPreloader ? game.platform.showPreloader() : Promise.resolve();
 
   const saved = game.platform.load(SAVE_KEY);
-  game.state = { coins: 0, muted: false, noAds: false, ...(saved || {}) };
+  game.state = {
+    coins: START_COINS, muted: false, noAds: false,
+    grid: Array(GRID_COLS * GRID_ROWS).fill(null),
+    eggsBought: {}, discovered: [], maxLevel: 0, lastSeen: Date.now(),
+    ...(saved || {}),
+  };
+  if (typeof game.state.eggsBought !== 'object') game.state.eggsBought = {}; // старый формат сохранения
+  // Офлайн-доход: половина обычного, не больше 2 часов.
+  const away = Math.min(OFFLINE_MAX_SEC, Math.max(0, (Date.now() - game.state.lastSeen) / 1000));
+  if (away > 60) {
+    const perSec = game.state.grid.reduce((sum, c) => sum + incomeOf(c), 0);
+    game.pendingOffline = Math.floor(perSec * away * OFFLINE_RATE);
+  }
   const owned = await game.platform.getOwnedProducts().catch(() => []);
   if (owned.includes('bez_reklamy')) game.state.noAds = true;
   audio.setMuted(game.state.muted);
@@ -62,18 +76,25 @@ async function boot() {
   requestAnimationFrame(loop);
 }
 
-// Ввод: одно касание = одно нажатие (и мышь, и палец).
-canvas.addEventListener('pointerdown', (e) => {
-  audio.unlock();
+// Ввод: мышь и палец одинаково — нажатие, движение, отпускание.
+function dispatch(name, e) {
   if (paused || !game.scene) return;
   const p = screen.toView(e.clientX, e.clientY);
-  game.scene.onTap?.(p.x, p.y);
+  game.scene[name]?.(p.x, p.y);
+}
+canvas.addEventListener('pointerdown', (e) => {
+  audio.unlock();
+  canvas.setPointerCapture?.(e.pointerId);
+  dispatch('onDown', e);
 });
+canvas.addEventListener('pointermove', (e) => dispatch('onMove', e));
+canvas.addEventListener('pointerup', (e) => dispatch('onUp', e));
+canvas.addEventListener('pointercancel', (e) => dispatch('onUp', e));
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // Автопауза при сворачивании или смене вкладки — требование Пикабу.
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { pauseGame(); game.platform?.flush?.(); }
+  if (document.hidden) { pauseGame(); if (game.state) game.saveState(); game.platform?.flush?.(); }
   else resumeGame();
 });
 
