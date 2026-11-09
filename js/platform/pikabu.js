@@ -31,11 +31,18 @@ export async function tryCreatePikabuAdapter({ onPause, onResume }) {
     });
 
     // Общая обёртка показа рекламы: пауза игры и звука до и после.
+    // Если блокировщик рекламы сломал показ (ошибка или зависание), считаем, что реклама
+    // не показалась, и продолжаем игру: через 90 с ожидание прерывается.
     async function show(kind) {
       const ad = sdk.ads[kind];
-      if (!ad || !ad.isSupported || !(await ad.canShow())) return { rendered: false };
+      try {
+        if (!ad || !ad.isSupported || !(await withTimeout(ad.canShow(), 5000))) return { rendered: false };
+      } catch (e) { return { rendered: false }; }
       onPause();
-      try { return await ad.show(); } finally { onResume(); }
+      try { return (await withTimeout(ad.show(), 90000)) || { rendered: false }; } catch (e) {
+        console.warn('Реклама не показана:', e.message);
+        return { rendered: false };
+      } finally { onResume(); }
     }
 
     return {
@@ -43,28 +50,30 @@ export async function tryCreatePikabuAdapter({ onPause, onResume }) {
       player: sdk.player,
       gameStarted() { sdk.gameStarted(); },
 
-      load(key) { return sdk.storage.get(key); },
+      load(key) { try { return sdk.storage.get(key); } catch (e) { return null; } },
       save(key, value) { sdk.storage.set(key, value); },
       async flush() { const r = await sdk.storage.flush(); return r.success; },
 
       async showPreloader() {
-        const ad = sdk.ads.preloader;
-        if (ad && ad.isSupported && (await ad.canShow())) await ad.show();
+        try {
+          const ad = sdk.ads.preloader;
+          if (ad && ad.isSupported && (await withTimeout(ad.canShow(), 5000))) await withTimeout(ad.show(), 15000);
+        } catch (e) { console.warn('Реклама при загрузке не показана:', e.message); }
       },
-      canShowInterstitial: async () => !!sdk.ads.fullscreen?.isSupported && sdk.ads.fullscreen.canShow(),
+      canShowInterstitial: async () => { try { return !!sdk.ads.fullscreen?.isSupported && await sdk.ads.fullscreen.canShow(); } catch (e) { return false; } },
       async showInterstitial() { return (await show('fullscreen')).rendered; },
-      canShowRewarded: async () => !!sdk.ads.rewarded?.isSupported && sdk.ads.rewarded.canShow(),
+      canShowRewarded: async () => { try { return !!sdk.ads.rewarded?.isSupported && await sdk.ads.rewarded.canShow(); } catch (e) { return false; } },
       async showRewarded() { return (await show('rewarded')).reward === true; },
 
       // Только постоянные товары (например «Без рекламы»). Расходуемые требуют сервера
       // для проверки подписи — добавим позже, если понадобятся.
       async getOwnedProducts() {
-        const list = await sdk.store.getPurchases();
+        const list = await withTimeout(sdk.store.getPurchases(), 5000);
         return list.filter((p) => !p.isConsumable).map((p) => p.productId);
       },
       // Цена товара в рублях (Пикабу отдаёт её в копейках); null — если узнать не удалось.
       async getPrice(productId) {
-        const list = await sdk.store.getProducts();
+        const list = await withTimeout(sdk.store.getProducts(), 5000);
         const p = list.find((x) => (x.productId || x.id) === productId);
         return p && typeof p.price === 'number' ? Math.round(p.price / 100) : null;
       },
@@ -72,7 +81,10 @@ export async function tryCreatePikabuAdapter({ onPause, onResume }) {
         onPause();
         try {
           const r = await sdk.store.purchase({ productId });
-          return r.success || r.reason === 'NON_CONSUMABLE_ALREADY_OWNED';
+          return !!r && (r.success || r.reason === 'NON_CONSUMABLE_ALREADY_OWNED');
+        } catch (e) {
+          console.warn('Покупка не прошла:', e.message);
+          return false;
         } finally { onResume(); }
       },
     };

@@ -67,7 +67,8 @@ async function boot() {
   game.scenes.album = createAlbumScene(game);
   game.go('menu');
 
-  await preloader;
+  // не ждём рекламу при загрузке дольше 15 секунд
+  await Promise.race([preloader.catch(() => {}), new Promise((r) => setTimeout(r, 15000))]);
   document.getElementById('loading').remove();
   game.platform.gameStarted();
   requestAnimationFrame(loop);

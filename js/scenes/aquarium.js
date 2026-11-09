@@ -157,7 +157,8 @@ export function createAquariumScene(game) {
     const ok = await game.platform.showRewarded();
     rewardBusy = false;
     const lvl = rewardEggLevel();
-    if (ok && spawn(lvl)) {
+    if (!ok) { showToast('Реклама сейчас недоступна, попробуйте позже'); return; }
+    if (spawn(lvl)) {
       discover(lvl);
       rewardEggReadyAt = game.playTime + REWARD_EGG_COOLDOWN;
       game.saveState();
@@ -323,16 +324,16 @@ export function createAquariumScene(game) {
   }
 
   function hintPill(ctx, view, str, y) {
-    ctx.font = '700 26px system-ui, sans-serif';
-    const w = Math.min(view.w - 40, ctx.measureText(str).width + 50);
+    ctx.font = '700 24px system-ui, sans-serif';
+    const w = Math.min(view.w - 40, ctx.measureText(str).width + 44);
     ctx.fillStyle = 'rgba(4,20,35,0.8)';
-    roundRect(ctx, (view.w - w) / 2, y - 28, w, 56, 28); ctx.fill();
-    text(ctx, str, view.w / 2, y, 26, '#ffffff', 'center', 700);
+    roundRect(ctx, (view.w - w) / 2, y - 21, w, 42, 21); ctx.fill();
+    text(ctx, str, view.w / 2, y, 24, '#ffffff', 'center', 700);
   }
 
   function drawTutorial(ctx, view) {
     if (s.tutorial === 0) {
-      hintPill(ctx, view, 'Нажмите, чтобы купить икринку', eggBtn.y - 44);
+      hintPill(ctx, view, 'Нажмите, чтобы купить икринку', eggBtn.y - 40);
       const bounce = Math.abs(Math.sin(t * 4)) * 10;
       ctx.fillStyle = '#ffe8a3';
       ctx.beginPath();
@@ -352,7 +353,7 @@ export function createAquariumScene(game) {
       ctx.beginPath(); ctx.arc(hx + 18, hy + 22, 18, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = '#16324f'; ctx.lineWidth = 3; ctx.stroke();
       ctx.globalAlpha = 1;
-      hintPill(ctx, view, 'Перетащите на такое же существо', layout.y0 - 24);
+      hintPill(ctx, view, 'Перетащите на такое же существо', layout.y0 - 17);
     }
   }
 

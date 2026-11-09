@@ -258,6 +258,7 @@ export function drawCreature(ctx, x, y, size, cell, t = 0) {
   if (c.deco === 'ice') snowflake(ctx, -r * 0.7, -r * 0.75, r * 0.28, t);
   ctx.restore();
 
+  if (cell.noBadge) return; // для рекламных картинок
   // номер уровня
   ctx.fillStyle = 'rgba(22,50,79,0.85)';
   ctx.beginPath(); ctx.arc(x + size * 0.34, y + size * 0.34, size * 0.12, 0, Math.PI * 2); ctx.fill();
