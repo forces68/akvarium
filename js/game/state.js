@@ -1,6 +1,6 @@
 // Сохранение игры: формат, перенос старых сохранений, общие расчёты.
 
-import { GRID_COLS, GRID_ROWS, START_COINS, TASK_TYPES, incomeOf } from './data.js';
+import { GRID_COLS, GRID_ROWS, START_COINS, TASK_TYPES, incomeOf, incomeMult } from './data.js';
 
 export function emptyAquarium() {
   return { grid: Array(GRID_COLS * GRID_ROWS).fill(null), eggsBought: {}, maxLevel: 0 };
@@ -13,8 +13,11 @@ export function makeState(saved) {
     discovered: [], lastSeen: Date.now(),
     daily: { last: '', streak: 0 },
     tasks: { day: '', list: [] },
+    upg: { income: 0, luck: 0, offline: 0 },
+    tutorial: 0, // 0 — купить икринки, 1 — слить, 2 — пояснение, 3 — обучение пройдено
     ...(saved || {}),
   };
+  if (saved && saved.tutorial === undefined && (saved.discovered || []).length >= 2) s.tutorial = 3;
   // Сохранения до появления нескольких аквариумов: одна сетка на верхнем уровне.
   if (saved && saved.grid && !saved.aq) {
     s.aq = [{
@@ -33,7 +36,7 @@ export function makeState(saved) {
 export function totalIncome(s) {
   let sum = 0;
   for (const a of s.aq) for (const c of a.grid) sum += incomeOf(c);
-  return sum;
+  return sum * incomeMult(s.upg);
 }
 
 // Дата по часам игрока: «2026-11-09». Подарок и задания обновляются в полночь.

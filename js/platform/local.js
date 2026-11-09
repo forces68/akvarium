@@ -38,6 +38,7 @@ export function createLocalAdapter() {
     async showRewarded() { await fakeAd('за награду'); return true; }, // true = награду выдать
 
     async getOwnedProducts() { return data.__owned || []; },
+    async getPrice() { return null; },
     async buy(productId) {
       const ok = confirm(`Тест: купить «${productId}»?`);
       if (ok) { data.__owned = [...new Set([...(data.__owned || []), productId])]; persist(); }

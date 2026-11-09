@@ -44,7 +44,6 @@ for (let a = 0; a < 3; a++) {
 export const START_COINS = 25; // хватает ровно на две первые икринки
 export const SHINY_CHANCE = 0.05;      // шанс сияющего существа при слиянии
 export const SHINY_BONUS = 1.5;        // сияющее приносит в 1,5 раза больше
-export const OFFLINE_MAX_SEC = 2 * 3600; // офлайн-доход копится до 2 часов
 export const OFFLINE_RATE = 0.5;       // вне игры — половина дохода (×2 за рекламу)
 export const REWARD_EGG_BONUS = 2;     // икринка за рекламу на 2 уровня выше обычной
 export const EGG_LAG = 4;              // икринка на 4 уровня ниже лучшего существа
@@ -74,6 +73,20 @@ export function eggCost(level, boughtMap, aq) {
 // Награды: подарок дня и задания растут вместе с доходом игрока.
 export function giftReward(perSec, day) { return Math.floor(Math.max(50, perSec * 120) * (1 + (day - 1) * 0.5)); }
 export function taskReward(perSec) { return Math.floor(Math.max(100, perSec * 180)); }
+
+// Улучшения за монеты. Сила подобрана симуляцией: с ними все три аквариума
+// проходятся примерно за 27 минут непрерывной игры (без них — за 35).
+export const UPGRADES = {
+  income: { title: 'Доход +10%', desc: (lv) => `Сейчас: ×${(1 + lv * 0.1).toFixed(1).replace('.', ',')}`, costs: [1e3, 1e5, 1e7] },
+  luck: { title: 'Икринка уровнем выше', desc: (lv) => `Шанс: ${lv * 10}%`, costs: [5e3, 5e6] },
+  offline: { title: 'Офлайн-доход дольше', desc: (lv) => `Копится до ${2 + lv * 2} ч`, costs: [2e3, 2e5, 2e7] },
+};
+export const NO_ADS_ID = 'bez_reklamy';
+export const NO_ADS_PRICE = 149; // ₽, если площадка не сообщила цену
+
+export function incomeMult(upg) { return 1 + (upg.income || 0) * 0.1; }
+export function luckChance(upg) { return (upg.luck || 0) * 0.1; }
+export function offlineMaxSec(upg) { return (2 + (upg.offline || 0) * 2) * 3600; }
 
 // Набор ежедневных заданий: выбираются 3 разных типа, цели слегка меняются день ото дня.
 export const TASK_TYPES = {

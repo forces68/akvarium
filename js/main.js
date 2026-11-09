@@ -6,7 +6,7 @@ import { audio } from './core/audio.js';
 import { createMenuScene } from './scenes/menu.js';
 import { createAquariumScene } from './scenes/aquarium.js';
 import { createAlbumScene } from './scenes/album.js';
-import { OFFLINE_MAX_SEC, OFFLINE_RATE } from './game/data.js';
+import { OFFLINE_RATE, NO_ADS_ID, offlineMaxSec } from './game/data.js';
 import { makeState, totalIncome } from './game/state.js';
 
 const SAVE_KEY = 'state';
@@ -52,14 +52,14 @@ async function boot() {
 
   const saved = game.platform.load(SAVE_KEY);
   game.state = makeState(saved);
-  // Офлайн-доход: половина обычного, не больше 2 часов.
-  const away = Math.min(OFFLINE_MAX_SEC, Math.max(0, (Date.now() - game.state.lastSeen) / 1000));
+  // Офлайн-доход: половина обычного, не дольше 2 часов (с улучшением — до 8).
+  const away = Math.min(offlineMaxSec(game.state.upg), Math.max(0, (Date.now() - game.state.lastSeen) / 1000));
   if (away > 60) {
     const perSec = totalIncome(game.state);
     game.pendingOffline = Math.floor(perSec * away * OFFLINE_RATE);
   }
   const owned = await game.platform.getOwnedProducts().catch(() => []);
-  if (owned.includes('bez_reklamy')) game.state.noAds = true;
+  if (owned.includes(NO_ADS_ID)) game.state.noAds = true;
   audio.setMuted(game.state.muted);
 
   game.scenes.menu = createMenuScene(game);

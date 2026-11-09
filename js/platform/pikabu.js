@@ -62,6 +62,12 @@ export async function tryCreatePikabuAdapter({ onPause, onResume }) {
         const list = await sdk.store.getPurchases();
         return list.filter((p) => !p.isConsumable).map((p) => p.productId);
       },
+      // Цена товара в рублях (Пикабу отдаёт её в копейках); null — если узнать не удалось.
+      async getPrice(productId) {
+        const list = await sdk.store.getProducts();
+        const p = list.find((x) => (x.productId || x.id) === productId);
+        return p && typeof p.price === 'number' ? Math.round(p.price / 100) : null;
+      },
       async buy(productId) {
         onPause();
         try {

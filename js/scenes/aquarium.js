@@ -4,7 +4,8 @@
 import { drawButton, hit, text, drawWater, makeBubbles, updateBubbles, roundRect } from './ui.js';
 import {
   GRID_COLS, GRID_ROWS, AQUARIUMS, CREATURES, SHINY_CHANCE, REWARD_EGG_BONUS,
-  REWARD_EGG_COOLDOWN, TASK_TYPES, incomeOf, eggCost, eggLevel, giftReward, taskReward, fmt,
+  REWARD_EGG_COOLDOWN, TASK_TYPES, UPGRADES, NO_ADS_ID, NO_ADS_PRICE,
+  incomeOf, eggCost, eggLevel, giftReward, taskReward, luckChance, fmt,
 } from '../game/data.js';
 import {
   emptyAquarium, totalIncome, today, yesterday, refreshTasks, addProgress, claimableTasks,
@@ -25,9 +26,12 @@ export function createAquariumScene(game) {
   let layout = null;
 
   const back = { label: '‹ Меню', x: 20, y: 20, w: 170, h: 66, fontSize: 28, color: '#8ecae6' };
-  const prevBtn = { label: '‹', x: 20, y: 115, w: 70, h: 62, fontSize: 40, color: '#8ecae6' };
-  const nextBtn = { label: '›', x: 370, y: 115, w: 70, h: 62, fontSize: 40, color: '#8ecae6' };
-  const tasksBtn = { label: 'Задания', x: 460, y: 115, w: 240, h: 62, fontSize: 28, color: '#bde0fe' };
+  const prevBtn = { label: '‹', x: 20, y: 115, w: 60, h: 62, fontSize: 40, color: '#8ecae6' };
+  const nextBtn = { label: '›', x: 260, y: 115, w: 60, h: 62, fontSize: 40, color: '#8ecae6' };
+  const tasksBtn = { label: 'Задания', x: 332, y: 115, w: 176, h: 62, fontSize: 24, color: '#bde0fe' };
+  const upgBtn = { label: 'Улучшения', x: 518, y: 115, w: 182, h: 62, fontSize: 24, color: '#bde0fe' };
+  let noAdsPrice = NO_ADS_PRICE;
+  game.platform.getPrice?.(NO_ADS_ID).then((p) => { if (p) noAdsPrice = p; }).catch(() => {});
   const eggBtn = { label: '', x: 42, y: 0, w: 636, h: 100, fontSize: 34 };
   const rewardBtn = { label: '', x: 42, y: 0, w: 636, h: 72, fontSize: 26, color: '#8ecae6' };
 
@@ -131,7 +135,10 @@ export function createAquariumScene(game) {
     const lvl = eggLevel(info(), aq().maxLevel);
     const cost = eggCost(lvl, aq().eggsBought, info());
     if (s.coins < cost) { showToast(`Нужно ${fmt(cost)} монет`); return; }
-    if (spawn(lvl)) {
+    // улучшение «Икринка уровнем выше»: иногда вылупляется существо на уровень старше
+    const lucky = lvl + 1 < info().to && Math.random() < luckChance(s.upg);
+    if (spawn(lucky ? lvl + 1 : lvl)) {
+      if (lucky) { discover(lvl + 1); showToast('Удача! Существо на уровень выше'); }
       s.coins -= cost;
       aq().eggsBought[lvl] = (aq().eggsBought[lvl] || 0) + 1;
       addProgress(s, 'egg');
@@ -177,6 +184,14 @@ export function createAquariumScene(game) {
       addProgress(s, 'merge');
       if (shiny) addProgress(s, 'shiny');
       discover(lvl);
+      if (s.tutorial === 1) {
+        s.tutorial = 2;
+        modals.push({
+          title: 'Получилось!',
+          lines: ['Каждое существо приносит монеты.', 'Чем выше уровень — тем больше.', 'Покупайте икринки и сливайте пары!'],
+          buttons: [{ label: 'Понятно', action: () => { closeModal(); s.tutorial = 3; game.saveState(); } }],
+        });
+      }
     } else {
       grid[to] = a;
       grid[from] = b; // обмен или перенос в пустую клетку
@@ -245,6 +260,102 @@ export function createAquariumScene(game) {
     return { title: TASK_TYPES[task.type].label(task.goal), shown };
   }
 
+  function openUpgrades() { modals.push({ kind: 'upgrades', title: 'Улучшения', buttons: [] }); }
+
+  function buyUpgrade(key) {
+    const lv = s.upg[key] || 0;
+    const cost = UPGRADES[key].costs[lv];
+    if (cost === undefined || s.coins < cost) return;
+    s.coins -= cost;
+    s.upg[key] = lv + 1;
+    game.audio.blip(820, 0.2);
+    game.saveState();
+  }
+
+  async function buyNoAds() {
+    const ok = await game.platform.buy(NO_ADS_ID);
+    if (ok) { s.noAds = true; game.saveState(); showToast('Спасибо! Реклама между экранами отключена'); }
+  }
+
+  function drawUpgrades(ctx, view, m) {
+    const rows = Object.keys(UPGRADES);
+    const w = 640, rowH = 120, h = 150 + (rows.length + 1) * (rowH + 10) + 110;
+    const x = (view.w - w) / 2, y = Math.max(10, (view.h - h) / 2);
+    ctx.fillStyle = '#e6f7ff';
+    roundRect(ctx, x, y, w, h, 30); ctx.fill();
+    text(ctx, m.title, view.w / 2, y + 55, 38, '#16324f');
+    text(ctx, `У вас ${fmt(s.coins)} монет`, view.w / 2, y + 100, 24, '#3d5a80', 'center', 600);
+    m.buttons = [];
+    const row = (i, title, desc, btn) => {
+      const ry = y + 135 + i * (rowH + 10);
+      ctx.fillStyle = '#ffffff';
+      roundRect(ctx, x + 24, ry, w - 48, rowH, 20); ctx.fill();
+      text(ctx, title, x + 48, ry + 40, 26, '#16324f', 'left', 700);
+      text(ctx, desc, x + 48, ry + 80, 22, '#3d5a80', 'left', 600);
+      Object.assign(btn, { x: x + w - 230, y: ry + 30, w: 190, h: 60, fontSize: 24 });
+      drawButton(ctx, btn);
+      m.buttons.push(btn);
+    };
+    rows.forEach((key, i) => {
+      const u = UPGRADES[key], lv = s.upg[key] || 0, cost = u.costs[lv];
+      const btn = cost === undefined
+        ? { label: 'Максимум', disabled: true }
+        : { label: fmt(cost), color: s.coins >= cost ? '#ffb703' : '#c9a24a', action: () => buyUpgrade(key) };
+      if (cost !== undefined && s.coins < cost) btn.disabled = true;
+      row(i, u.title, `${u.desc(lv)} · ур. ${lv} из ${u.costs.length}`, btn);
+    });
+    // «Без рекламы» — постоянная покупка; реклама за награду остаётся, но только по желанию игрока
+    row(rows.length, 'Без рекламы',
+      s.noAds ? 'Реклама отключена' : 'Нет рекламы между экранами',
+      s.noAds ? { label: 'Куплено', disabled: true } : { label: `${noAdsPrice} ₽`, color: '#90be6d', action: buyNoAds });
+    const close = { label: 'Закрыть', x: x + 50, y: y + h - 96, w: w - 100, h: 76, fontSize: 30, color: '#8ecae6', action: closeModal };
+    drawButton(ctx, close);
+    m.buttons.push(close);
+  }
+
+  // Обучение: стрелка к кнопке икринки, затем «рука» показывает перетаскивание.
+  function samePair() {
+    const g = aq().grid;
+    for (let i = 0; i < g.length; i++) for (let j = i + 1; j < g.length; j++) {
+      if (g[i] && g[j] && g[i].lvl === g[j].lvl && g[i].lvl < info().to) return [i, j];
+    }
+    return null;
+  }
+
+  function hintPill(ctx, view, str, y) {
+    ctx.font = '700 26px system-ui, sans-serif';
+    const w = Math.min(view.w - 40, ctx.measureText(str).width + 50);
+    ctx.fillStyle = 'rgba(4,20,35,0.8)';
+    roundRect(ctx, (view.w - w) / 2, y - 28, w, 56, 28); ctx.fill();
+    text(ctx, str, view.w / 2, y, 26, '#ffffff', 'center', 700);
+  }
+
+  function drawTutorial(ctx, view) {
+    if (s.tutorial === 0) {
+      hintPill(ctx, view, 'Нажмите, чтобы купить икринку', eggBtn.y - 44);
+      const bounce = Math.abs(Math.sin(t * 4)) * 10;
+      ctx.fillStyle = '#ffe8a3';
+      ctx.beginPath();
+      ctx.moveTo(view.w / 2 - 18, eggBtn.y - 14 + bounce); ctx.lineTo(view.w / 2 + 18, eggBtn.y - 14 + bounce);
+      ctx.lineTo(view.w / 2, eggBtn.y + 6 + bounce); ctx.closePath(); ctx.fill();
+    } else if (s.tutorial === 1) {
+      const pair = samePair();
+      if (!pair) return;
+      const a = cellRect(pair[0]), b = cellRect(pair[1]);
+      const k = (t % 1.8) / 1.4; // движение 1,4 с, пауза 0,4 с
+      const p = Math.min(1, k), e = p * p * (3 - 2 * p);
+      const hx = a.x + a.size / 2 + (b.x - a.x) * e, hy = a.y + a.size / 2 + (b.y - a.y) * e;
+      ctx.globalAlpha = 0.45;
+      drawCreature(ctx, hx, hy, a.size, aq().grid[pair[0]], 0);
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#ffffff'; // «палец»
+      ctx.beginPath(); ctx.arc(hx + 18, hy + 22, 18, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#16324f'; ctx.lineWidth = 3; ctx.stroke();
+      ctx.globalAlpha = 1;
+      hintPill(ctx, view, 'Перетащите на такое же существо', layout.y0 - 24);
+    }
+  }
+
   function drawTasks(ctx, view, m) {
     const w = 640, h = 690;
     const x = (view.w - w) / 2, y = (view.h - h) / 2;
@@ -281,8 +392,9 @@ export function createAquariumScene(game) {
     ctx.fillStyle = 'rgba(4,20,35,0.7)';
     ctx.fillRect(0, 0, view.w, view.h);
     if (m.kind === 'tasks') { drawTasks(ctx, view, m); return; }
+    if (m.kind === 'upgrades') { drawUpgrades(ctx, view, m); return; }
     const w = 600;
-    const h = (m.creature ? 400 : 200) + m.lines.length * 44 + m.buttons.length * 96;
+    const h = (m.creature ? 400 : 170) + m.lines.length * 44 + m.buttons.length * 96;
     const x = (view.w - w) / 2, y = (view.h - h) / 2;
     ctx.fillStyle = '#e6f7ff';
     roundRect(ctx, x, y, w, h, 30); ctx.fill();
@@ -310,6 +422,7 @@ export function createAquariumScene(game) {
     update(dt) {
       t += dt;
       updateBubbles(bubbles, game.view, dt);
+      if (s.tutorial === 0 && samePair()) s.tutorial = 1;
       if (!modals.length) {
         s.coins += totalIncome(s) * dt;
         addProgress(s, 'play', dt);
@@ -334,12 +447,13 @@ export function createAquariumScene(game) {
       nextBtn.disabled = s.current >= s.aq.length - 1;
       drawButton(ctx, prevBtn);
       drawButton(ctx, nextBtn);
-      text(ctx, inf.name, 230, 140, inf.name.length > 8 ? 26 : 32, '#ffffff');
-      text(ctx, `${s.current + 1} из ${s.aq.length}`, 230, 168, 18, '#e6f7ff', 'center', 600);
+      text(ctx, inf.name, 170, 140, inf.name.length > 8 ? 22 : 30, '#ffffff');
+      text(ctx, `${s.current + 1} из ${s.aq.length}`, 170, 168, 18, '#e6f7ff', 'center', 600);
       const ready = claimableTasks(s);
       tasksBtn.label = ready ? `Задания (${ready})` : 'Задания';
       tasksBtn.color = ready ? '#ffb703' : '#bde0fe';
       drawButton(ctx, tasksBtn);
+      drawButton(ctx, upgBtn);
 
       for (let i = 0; i < a.grid.length; i++) {
         const r = cellRect(i);
@@ -360,9 +474,7 @@ export function createAquariumScene(game) {
       rewardBtn.disabled = rewardBusy || wait > 0;
       drawButton(ctx, rewardBtn);
 
-      if (s.discovered.length < 2 && !modals.length) {
-        text(ctx, 'Купите две икринки и перетащите', view.w / 2, layout.y0 - 20, 26, '#ffffff', 'center', 600);
-      }
+      if (!modals.length && !drag) drawTutorial(ctx, view);
 
       if (drag) {
         const c = a.grid[drag.from];
@@ -392,6 +504,7 @@ export function createAquariumScene(game) {
       if (hit(prevBtn, x, y)) { switchTo(s.current - 1); return; }
       if (hit(nextBtn, x, y)) { switchTo(s.current + 1); return; }
       if (hit(tasksBtn, x, y)) { openTasks(); return; }
+      if (hit(upgBtn, x, y)) { openUpgrades(); return; }
       if (hit(eggBtn, x, y)) { buyEgg(); return; }
       if (hit(rewardBtn, x, y)) { await rewardEgg(); return; }
       const i = cellAt(x, y);
