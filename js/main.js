@@ -61,6 +61,7 @@ async function boot() {
   const owned = await game.platform.getOwnedProducts().catch(() => []);
   if (owned.includes(NO_ADS_ID)) game.state.noAds = true;
   audio.setMuted(game.state.muted);
+  audio.setMusic(game.state.music !== false);
 
   game.scenes.menu = createMenuScene(game);
   game.scenes.aquarium = createAquariumScene(game);

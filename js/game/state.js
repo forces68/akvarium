@@ -8,7 +8,7 @@ export function emptyAquarium() {
 
 export function makeState(saved) {
   const s = {
-    coins: START_COINS, muted: false, noAds: false,
+    coins: START_COINS, muted: false, music: true, noAds: false,
     aq: [emptyAquarium()], current: 0,
     discovered: [], lastSeen: Date.now(),
     daily: { last: '', streak: 0 },

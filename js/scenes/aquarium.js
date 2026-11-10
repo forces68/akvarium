@@ -126,6 +126,7 @@ export function createAquariumScene(game) {
   function switchTo(idx) {
     if (idx < 0 || idx >= s.aq.length) return;
     s.current = idx;
+    game.audio.setTheme(idx);
     drag = null;
     game.audio.blip(440);
     game.saveState();
@@ -413,6 +414,7 @@ export function createAquariumScene(game) {
 
   return {
     enter() {
+      game.audio.setTheme(s.current);
       refreshTasks(s);
       offerOffline();
       // на случай старого сохранения, где последний уровень уже получен
